@@ -15,6 +15,8 @@ import pandas as pd
 import io
 import csv
 import webbrowser
+import subprocess
+
 
 
 
@@ -375,11 +377,12 @@ class Window(Frame):
             self.Open_csv_filename.set("coordinates.csv")
             self.Open_csv_filename_Entry = Entry(self.Measurment_Frame_2, textvariable=self.Open_csv_filename, width=10)
             self.Open_csv_filename_Entry.place(relx=0.25, rely=0.65, relheight=0.05, relwidth=0.4, anchor="n")
+            self.Open_csv_filename_Entry.bind("<Return>", self.MessageInMessageFrame_update)
             self.Open_CSV_Button = Button(self.Measurment_Frame_2, text="Open CSV", command=lambda:self.open_csv(self.Open_csv_filename_Entry.get()))
             self.Open_CSV_Button.place(relx=0.75, rely=0.65, relheight=0.05, relwidth=0.4, anchor="n")
 
             self.Measurment_Frame_2_LabelVar3 = StringVar()
-            self.MessageInMessageFrame_update()
+            self.MessageInMessageFrame = "If you want to start the measurment from the file\n'" + self.Open_csv_filename_Entry.get() + "'\npress the 'Start Measurment'-Button."
             self.Measurment_Frame_2_LabelVar3.set(self.MessageInMessageFrame)
             self.Measurment_Frame_2_Label3 = Label(self.Measurment_Frame_2, textvar=self.Measurment_Frame_2_LabelVar3,
                                                    anchor="nw")
@@ -419,6 +422,7 @@ class Window(Frame):
                 self.Alignment_DEC_Entry.insert(0, DEC)
                 self.Alignment_RA = RA
                 self.Alignment_DEC = DEC
+
             except:
                 self.Error("There occurred an error with choosing the option and inserting the Ra/Dec.")
             return
@@ -435,6 +439,7 @@ class Window(Frame):
                 self.active_var.set('OFF')
                 self.var_connection_status.set("Not Connected")
                 self.active = False
+
             else:
                 self.active = True
                 print("Initialising to CGX mount...")
@@ -544,7 +549,6 @@ class Window(Frame):
                     self.Error(self.GoTo_RaDec_InvalidRaDec_Message)
                     self.GoTo_RaDec_Status.set('\n --- \n\n' % (Ra, Dec))
                     return
-            print("slewing to ra dec : ", Ra, Dec)
             try:
                 self.cgx.goto_radec(ra=float(Ra), dec=float(Dec))
                 # mount moved
@@ -554,7 +558,7 @@ class Window(Frame):
                 print("ERROR: GoTo_RaDec did not work")
                 self.GoTo_RaDec_Error_Message = "\nMount was not able to move to given Ra/Dec coordinates\n"
                 self.Error(self.GoTo_RaDec_Error_Message)
-                self.GoTo_RaDec_Status.set('\n --- \n\n' % (Ra, Dec))
+                self.GoTo_RaDec_Status.set('\n GoTo failed.\n\n' % (Ra, Dec))
 
         def GoTo_Alignment(self, Ra, Dec):
             '''
@@ -696,31 +700,17 @@ class Window(Frame):
             '''
             try:
                 self.cgx.sync(float(Ra), float(Dec))
+                self.Message("Telescope synchronised.")
             except:
                 print("Error: Synchronize did not work")
                 self.Error("\nSynchronization did not work.\n")
 
-        def Error(self, Message):
-            '''
-            This function prints an Error Message in the Terminal and Also gives an Error Message in a Messagebox of Tkinter.
-            :param Message: The Message which should be printed
-            '''
-            tkinter.messagebox.showerror("Error", Message)
-            print(Message)
-
-        def Measure(self,):
+        def Measure(self):
             x=1
+            self.Message("Measuring...")
             #Do here fancy Measurement Programm
             #Pop Up Plots
             #Save All Data
-
-        def MilkyWayGalaxy_Measurment(self, filename):
-            '''
-            This function will open and read the filename file and then start the measurment, for each set of coordinates.
-            :param filename: name of the csv-file which should contain the coordinates
-            '''
-            y = 0
-            return y
 
         def calculate_coordinates_measurement(self, filename):
             """
@@ -759,9 +749,11 @@ class Window(Frame):
 
             csv_file = open(filename,"w", newline="")
             wr = csv.writer(csv_file)
+            wr.writerow(["Name", "RA", "DEC"])
             bla = [index, Ra_Cord, Dec_Cord]
             wr.writerows(zip(*bla))
             csv_file.close()
+            print("CSV file " + filename + " was created")
             int(Ra_Cord[0])
 
         def open_csv(self, name_file):
@@ -770,18 +762,60 @@ class Window(Frame):
             If not an Error Message is displayed.
             '''
             try:
-                self.MessageInMessageFrame_update()
-                webbrowser.open(name_file)
+                self.MessageInMessageFrame = "If you want to start the measurment from the file\n'" + self.Open_csv_filename_Entry.get() + "'\npress the 'Start Measurment'-Button."
+                self.Measurment_Frame_2_LabelVar3.set(self.MessageInMessageFrame)
+                subprocess.call(['open', name_file])
+                print("Opening file " + name_file)
             except:
                 self.Error("It was not possible to open the file.")
 
-        def MessageInMessageFrame_update(self):
-            self.MessageInMessageFrame = "If you want to start the measurment from the file\n'" + self.Open_csv_filename_Entry.get() + "'\npress the 'Start Measurment'-Button."
-            self.Measurment_Frame_2_LabelVar3.set(self.MessageInMessageFrame)
+        def MessageInMessageFrame_update(self, event):
+            self.Measurment_Frame_2_LabelVar3.set("If you want to start the measurment from the file\n'" + self.Open_csv_filename_Entry.get() + "'\npress the 'Start Measurment'-Button.")
 
+        def MilkyWayGalaxy_Measurment(self, filename):
+            '''
+            This function will open and read the filename file and then start the measurment, for each set of coordinates.
+            :param filename: name of the csv-file which should contain the coordinates
+            '''
 
-HEIGHT = 700
-WIDTH = 900
+            csv_file = open(filename,"r", newline="")
+            print("Reading file " + filename)
+            n = 0
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+                self.Message("The program will now start the measurement of  " + row["Name"] +"; the coordinates are RA: " + row["RA"]  + ", DEC: " + row["DEC"]  +
+                             ".\n  Press okay to continue.")
+                try:
+                    Name, RA, Dec = row["Name"], row["RA"], row["DEC"]
+                    Ra_coord, Dec_coord = float(RA), float(Dec)
+                except:
+                    self.Error("File could not be read. Error occurred at row #" + str(num))
+                try:
+                    #self.GoTo__RaDec(Ra_coord, Dec_coord)
+                    #time.sleep(10)
+                    self.Measure()
+                    #time.sleep(10)
+                except:
+                    self.Error("Measurment failed. Error occured at row #" + str(num))
+                n = n + 1
+            csv_file.close()
+            return 0
+
+        def Error(self, Message):
+            '''
+            This function prints an Error Message in the Terminal and Also gives an Error Message in a Messagebox of Tkinter.
+            :param Message: The Message which should be printed
+            '''
+            tkinter.messagebox.showerror("Error", Message)
+            print(Message)
+
+        def Message(self, Message):
+            tkinter.messagebox.showinfo(title=None, message=Message)
+            print(Message)
+
+HEIGHT = 900
+WIDTH = 1100
+
 
 #creat tk
 root = Tk()
